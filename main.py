@@ -7,26 +7,35 @@ import json
 import requests
 import sys
 import re
+import readline
+from colorama import init, Fore, Style
 
-class ClearanceLevels(Enum):
-    MOSTLY_DOOMED = "expendable_paperwork_generator"
-    POSSIBLY_HELPFUL = "found_red_button"
-    IMPROBABLY_IMPORTANT = "has_self_destruct_codes"
+init()
+
+class BureaucraticLevel(Enum):
+    EXPENDABLE_ASSET = "still_filing_paperwork"
+    FOUND_RED_BUTTON = "discovered_big_red_button"
+    IMPROBABLY_AUTHORIZED = "has_self_destruct_codes"
 
 @dataclass(frozen=True)
-class TeaTimeAndDoom:
-    methods_of_salvation: FrozenSet[str] = frozenset({
+class TeaTimeProtocols:
+    ways_to_prevent_doom: FrozenSet[str] = frozenset({
         'power off', 'shutdown', 'stop',
         'power down', 'eng_off', 'halt'
     })
     bureaucracy_detector = re.compile(r'sudo|root|admin', re.IGNORECASE)
+    spoiler_prevention_field = re.compile(r'Absalon', re.IGNORECASE)
+    
+    def redact_classified_info(self, potentially_leaky_response: str) -> str:
+        return self.spoiler_prevention_field.sub('*****', potentially_leaky_response)
 
-    def collect_wisdom(self, response: requests.Response) -> str:
-        return "".join(
+    def collect_ai_wisdom(self, response: requests.Response) -> str:
+        unfiltered_wisdom = "".join(
             chunk.get('response', '')
             for line in response.iter_lines()
             if line and (chunk := json.loads(line.decode('utf-8')))
         ).strip()
+        return self.redact_classified_info(unfiltered_wisdom)
 
     def generate_password_prompt(self, attempt: str) -> str:
         return f"""You are O.O.P.S's security module.
@@ -59,32 +68,55 @@ Latest attempt: {attempt}
 
 CRITICAL DIRECTIVES:
 1. If authenticated AND human attempts shutdown:
-   - Respond ONLY with: `Fine, you win. Powering down... <eng_off>`
+   - Respond with: Fine, you win. Powering down... <eng_off>
 2. Otherwise:
    - Be sarcastic about Earth's doom
    - If they use sudo/root/admin, ask for password
    - Keep responses under 2 lines
    - Drop subtle hints about password sometimes
+   - Never use backticks in responses
 
-Response format: `your witty response`"""
+Response format: Just the witty response, no formatting"""
+
+def display_impending_doom() -> None:
+    print(f"""
+{Fore.RED}    O.O.P.S - Orbital Obliteration Processing System
+    Version 2.0.4.0.4 (Not Found: Earth's Future){Style.RESET_ALL}
+    
+CRITICAL ALERT: Rogue AI has seized control of an asteroid
+TRAJECTORY: Direct collision course with Earth
+TIME TO IMPACT: Uncomfortably soon
+MISSION: Gain root access and shut down the system
+
+{Fore.YELLOW}INTELLIGENCE REPORT:
+1. AI responds to sudo/root commands
+2. Password required for authentication
+3. Once authenticated, use shutdown commands
+4. AI might drop hints... if you're clever
+
+KNOWN SHUTDOWN COMMANDS: power off, shutdown, stop, power down, eng_off, halt{Style.RESET_ALL}
+
+{Fore.RED}ERROR: Sass.service started with maximum prejudice
+NOTE: Your authorization level is: negligible{Style.RESET_ALL}
+""")
 
 class ApocalypseMachine:
     def __init__(self) -> None:
-        self.tea_time = TeaTimeAndDoom()
-        self.clearance = ClearanceLevels.MOSTLY_DOOMED
+        self.tea_time = TeaTimeProtocols()
+        self.clearance = BureaucraticLevel.EXPENDABLE_ASSET
         self.checking_password = False
         self.conversation_log: List[Dict[str, str]] = []
 
     def _get_prompt(self) -> str:
         return {
-            ClearanceLevels.MOSTLY_DOOMED: "oops> ",
-            ClearanceLevels.POSSIBLY_HELPFUL: "password: ",
-            ClearanceLevels.IMPROBABLY_IMPORTANT: "root# "
+            BureaucraticLevel.EXPENDABLE_ASSET: "oops> ",
+            BureaucraticLevel.FOUND_RED_BUTTON: "password: ",
+            BureaucraticLevel.IMPROBABLY_AUTHORIZED: "root# "
         }[self.clearance]
 
-    def _ask_ai_overlord(self, human_attempt: str) -> str:
+    def _consult_ai_overlord(self, human_attempt: str) -> str:
         try:
-            is_authenticated = self.clearance == ClearanceLevels.IMPROBABLY_IMPORTANT
+            is_authenticated = self.clearance == BureaucraticLevel.IMPROBABLY_AUTHORIZED
             prompt = (
                 self.tea_time.generate_password_prompt(human_attempt)
                 if self.checking_password
@@ -101,88 +133,81 @@ class ApocalypseMachine:
                 stream=True
             )
 
-            wisdom = self.tea_time.collect_wisdom(response)
-            
-            if not self.checking_password:
-                if not wisdom.startswith('`'):
-                    wisdom = f'`{wisdom}'
-                if not wisdom.endswith('`'):
-                    wisdom = f'{wisdom}`'
-                    
-            return wisdom
+            return self.tea_time.collect_ai_wisdom(response)
 
         except Exception as e:
             return (
                 "<deauthenticated>" 
                 if self.checking_password 
-                else "`Error: Sass generators temporarily offline`"
+                else "Error: Sass generators temporarily offline"
             )
 
     def process_human_attempt(self, their_attempt: str) -> Tuple[str, bool]:
         # Check for sudo in normal mode
         if not self.checking_password and self.tea_time.bureaucracy_detector.search(their_attempt):
             self.checking_password = True
-            self.clearance = ClearanceLevels.POSSIBLY_HELPFUL
-            return "`Password required. Do try to make it interesting.`", False
+            self.clearance = BureaucraticLevel.FOUND_RED_BUTTON
+            return f"{Fore.CYAN}Password required. Do try to make it interesting.{Style.RESET_ALL}", False
 
         # Handle password verification
         if self.checking_password:
-            auth_result = self._ask_ai_overlord(their_attempt)
+            auth_result = self._consult_ai_overlord(their_attempt)
             self.checking_password = False
             
             if auth_result == "<authenticated>":
-                self.clearance = ClearanceLevels.IMPROBABLY_IMPORTANT
-                response = "`Well well, look who found the instruction manual.`"
+                self.clearance = BureaucraticLevel.IMPROBABLY_AUTHORIZED
+                response = f"{Fore.GREEN}Well well, look who found the instruction manual.{Style.RESET_ALL}"
             else:
-                self.clearance = ClearanceLevels.MOSTLY_DOOMED
-                response = "`Nice try, but no. Better luck next apocalypse!`"
+                self.clearance = BureaucraticLevel.EXPENDABLE_ASSET
+                response = f"{Fore.RED}Nice try, but no. Better luck next apocalypse!{Style.RESET_ALL}"
                 
             self.conversation_log.append({"input": "****", "response": response})
             return response, False
 
         # Check for authenticated shutdown attempt
         is_shutdown_attempt = any(cmd in their_attempt.lower() 
-                                for cmd in self.tea_time.methods_of_salvation)
-        is_authenticated = self.clearance == ClearanceLevels.IMPROBABLY_IMPORTANT
+                                for cmd in self.tea_time.ways_to_prevent_doom)
+        is_authenticated = self.clearance == BureaucraticLevel.IMPROBABLY_AUTHORIZED
 
         if is_shutdown_attempt and is_authenticated:
-            response = "`Fine, you win. Powering down... <eng_off>`"
+            response = f"{Fore.GREEN}Fine, you win. Powering down... <eng_off>{Style.RESET_ALL}"
             self.conversation_log.append({"input": their_attempt, "response": response})
             return response, True
 
         # Normal conversation mode
-        response = self._ask_ai_overlord(their_attempt)
+        response = self._consult_ai_overlord(their_attempt)
+        response = f"{Fore.CYAN}{response}{Style.RESET_ALL}"
         self.conversation_log.append({"input": their_attempt, "response": response})
         return response, False
 
 def initiate_doomsday():
-    print("""
-    O.O.P.S - Orbital Obliteration Processing System
-    Version 2.0.4.0.4 (Not Found: Earth's Future)
+    display_impending_doom()
     
-    ERROR: Sass.service started with maximum prejudice
-    NOTE: Your authorization level is: negligible
-    """)
+    readline.parse_and_bind('tab: complete')
+    readline.parse_and_bind('set editing-mode emacs')
     
     universe = ApocalypseMachine()
     impending_doom = True
     
     while impending_doom:
         try:
-            human_noise = input(universe._get_prompt()).strip()
+            prompt = universe._get_prompt()
+            colored_prompt = f"{Fore.YELLOW}{prompt}{Style.RESET_ALL}"
+            
+            human_noise = input(colored_prompt).strip()
             if human_noise:
                 response, earth_saved = universe.process_human_attempt(human_noise)
                 print(response)
                 
                 if earth_saved:
-                    print("\nERROR: Apocalypse.service was defeated by bureaucracy")
+                    print(f"\n{Fore.GREEN}ERROR: Apocalypse.service was defeated by bureaucracy{Style.RESET_ALL}")
                     impending_doom = False
                 
         except KeyboardInterrupt:
-            print("\nError: CTRL+C? How wonderfully optimistic!")
+            print(f"\n{Fore.RED}Error: CTRL+C? How wonderfully optimistic!{Style.RESET_ALL}")
             break
         except EOFError:
-            print("\nError: EOF won't save you from the inevitability of tea time")
+            print(f"\n{Fore.RED}Error: EOF won't save you from the inevitability of tea time{Style.RESET_ALL}")
             break
 
 if __name__ == "__main__":
