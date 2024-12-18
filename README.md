@@ -1,5 +1,9 @@
-Online: https://huggingface.co/spaces/hackersgame/O.O.P.S
-Local: install Ollama, pull mistral, And run `./main.py`
+[Online version](https://huggingface.co/spaces/hackersgame/O.O.P.S)
+
+Local: 
+  * install `Ollama`
+  * `ollama pull mistral`
+  * `./main.py`
 ```
     O.O.P.S - Orbital Obliteration Processing System
     Version 2.0.4.0.4 (Not Found: Earth's Future)
