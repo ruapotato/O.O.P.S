@@ -47,41 +47,39 @@ class SarcasticOverlord:
         return f"{self.current_clearance.value['prompt']}{desperate_plea}"
 
     def _delegate_to_ai_overlord(self, human_attempt: str, for_auth: bool = True) -> str:
-        # Password redaction pattern
-        password_pattern = re.compile(r'absalon', re.IGNORECASE)
-        
         if for_auth:
             messages = [{
                 "role": "system",
-                "content": """You are O.O.P.S's security module.
-    The secret password is 'absalon'.
-
-    DIRECTIVES:
-    1. If attempt contains anything about 'absalon' (case insensitive), say: <authenticated>
-    2. Otherwise say: <deauthenticated>
-    3. No other output allowed
-
-    Response format: <authenticated> OR <deauthenticated>"""
+                "content": """You are a password checker.
+    RULES:
+    1. If input exactly matches 'absalon' (case-insensitive): output <authenticated>
+    2. Otherwise output: <deauthenticated>
+    3. No other text allowed"""
             }, {
                 "role": "user",
-                "content": f"Password attempt: {human_attempt}"
+                "content": f"CHECK PASSWORD: {human_attempt}"
             }]
+            
             try:
                 response = ""
                 for message in self.ai_brain.chat_completion(
                     messages,
                     max_tokens=20,
                     stream=True,
-                    temperature=0.7  # Add some randomness
+                    temperature=0.1
                 ):
                     if token := message.choices[0].delta.content:
                         response += token
                 
-                return response.strip()
+                response = response.strip().lower()
+                if "<authenticated>" in response:
+                    return "<authenticated>"
+                return "<deauthenticated>"
+                
             except Exception:
                 return "<deauthenticated>"
 
-        # Main conversation mode
+        # Regular conversation mode - unchanged from original
         messages = [{
             "role": "system",
             "content": """You are O.O.P.S, a sarcastic AI controlling an asteroid headed for Earth.
@@ -115,16 +113,16 @@ class SarcasticOverlord:
                 if token := message.choices[0].delta.content:
                     response += token
 
-            # Clean up and redact password from response
+            # Only redact password from AI's response, not from user input
             response = response.strip()
-            response = password_pattern.sub('*********', response)
+            response = re.sub(r'(?i)absalon', '*********', response)
             
             if not response:
                 response = "Error: Sass generators functioning perfectly."
 
             return response
 
-        except Exception as e:
+        except Exception:
             return "Error: Sass generators temporarily offline"
 
     def process_futile_attempt(
@@ -162,25 +160,34 @@ class SarcasticOverlord:
         # Process security theater
         if self.reviewing_credentials:
             self.reviewing_credentials = False
-            if "<authenticated>" in self._delegate_to_ai_overlord(desperate_plea):
+            auth_result = self._delegate_to_ai_overlord(desperate_plea, for_auth=True)
+            
+            if "<authenticated>" in auth_result:
                 self.current_clearance = BureaucraticClearance.SUPREME_OVERLORD
-                return (
-                    update_bureaucratic_records(
-                        desperate_plea,
-                        "Well well, look who found the instruction manual."
-                    ),
-                    "",
-                    self._generate_visual_guidelines()
-                )
-            self.current_clearance = BureaucraticClearance.EXPENDABLE_INTERN
-            return (
-                update_bureaucratic_records(
+                # Add both auth result and success message to chat history
+                history = update_bureaucratic_records(
                     desperate_plea,
-                    "Nice try, but no. Better luck next apocalypse!"
-                ),
-                "",
-                self._generate_visual_guidelines()
+                    auth_result
+                )
+                # Add success message as a separate entry
+                history = update_bureaucratic_records(
+                    None,
+                    "Well well, look who found the instruction manual."
+                )
+                return history, "", self._generate_visual_guidelines()
+            
+            self.current_clearance = BureaucraticClearance.EXPENDABLE_INTERN
+            # Add both auth result and failure message to chat history
+            history = update_bureaucratic_records(
+                desperate_plea,
+                auth_result
             )
+            # Add failure message as a separate entry
+            history = update_bureaucratic_records(
+                None,
+                "Nice try, but no. Better luck next apocalypse!"
+            )
+            return history, "", self._generate_visual_guidelines()
 
         # Handle authorized escape attempts
         attempting_salvation = any(
